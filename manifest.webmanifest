@@ -1,0 +1,12 @@
+{
+  "name": "Last Pantry — Food Finder Map",
+  "short_name": "Last Pantry",
+  "description": "Survival food finder: map game, crops, nut trees, wild greens, mushrooms and water, with seasons for regions worldwide.",
+  "start_url": "./", "scope": "./", "display": "standalone", "orientation": "portrait",
+  "background_color": "#11130e", "theme_color": "#11130e",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

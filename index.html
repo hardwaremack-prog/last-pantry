@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Last Pantry">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#11130e">
+<title>Last Pantry — Food Finder Map</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap">
+<link rel="stylesheet" crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --bg:#11130e; --panel:#1b1e16; --panel2:#252a1e; --line:#3a4030; --text:#ece6d6; --dim:#a7a48f;
+  --brass:#c9a24a; --brass2:#8f7230; --rust:#b5552b; --moss:#7fa650; --danger:#d9483b;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  --stencil:"Special Elite","Courier New",monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+#map{position:fixed;inset:0;z-index:1;background:#20221c}
+.leaflet-container{background:#1e201a}
+.leaflet-control-attribution{font-size:10px;background:rgba(0,0,0,.55)!important;color:#bbb}
+.leaflet-control-attribution a{color:#ddd}
+body.grim .leaflet-tile-pane{filter:sepia(.45) saturate(.75) brightness(.85) contrast(1.05)}
+
+#top{position:fixed;left:0;right:0;top:0;z-index:500;padding:calc(var(--safe-t) + 8px) 10px 8px;
+  background:linear-gradient(#11130ef2,#11130ecc 70%,#11130e00);pointer-events:none}
+#top > *{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:8px}
+.brand h1{font:400 21px/1 var(--stencil);margin:0;letter-spacing:1px;flex:1;display:flex;align-items:baseline;gap:8px;color:var(--brass);text-shadow:0 1px 0 #000}
+.brand h1 small{font-family:-apple-system,sans-serif;font-weight:500;color:var(--dim);font-size:12px;letter-spacing:0}
+.iconbtn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 11px;font-size:14px}
+#chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none}
+#chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 10px;font-size:13px;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.chip.on{border-color:var(--brass);background:#3a3218}
+.chip b{font-weight:700}
+.chip.season.on{border-color:var(--moss);background:#26341a}
+
+#fabs{position:fixed;right:12px;z-index:600;display:flex;flex-direction:column;gap:10px;transition:bottom .25s}
+.fab{width:52px;height:52px;border-radius:16px;border:1px solid var(--line);background:var(--panel);font-size:22px;display:grid;place-items:center;box-shadow:0 4px 14px #0008}
+.fab.main{background:var(--brass);color:#1a1405;border-color:var(--brass2);font-size:28px;font-weight:700}
+.fab.live{border-color:#3b82f6;box-shadow:0 0 0 3px #3b82f655,0 4px 14px #0008}
+
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:700;background:var(--panel);border-top:1px solid var(--line);
+  border-radius:18px 18px 0 0;box-shadow:0 -8px 24px #0009;display:flex;flex-direction:column;
+  height:calc(42vh + var(--safe-b));transition:height .25s;padding-bottom:var(--safe-b)}
+#sheet.min{height:calc(64px + var(--safe-b))}
+#sheet.max{height:calc(82vh + var(--safe-b))}
+.grab{padding:8px 14px 6px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;position:relative}
+.grab .bar{position:absolute;left:50%;top:4px;width:40px;height:4px;margin-left:-20px;border-radius:4px;background:#545a45}
+.grab input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-top:6px;min-width:0}
+.grab select{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 6px;margin-top:6px}
+#list{overflow-y:auto;flex:1;padding:4px 10px 12px;-webkit-overflow-scrolling:touch}
+.item{display:flex;gap:10px;align-items:center;padding:10px;border-radius:12px;background:var(--panel2);margin-bottom:8px;border:1px solid transparent}
+.item.sel{border-color:var(--brass)}
+.item.off{opacity:.62}
+.thumb{width:52px;height:52px;border-radius:12px;flex:none;background:#323828 center/cover no-repeat;display:grid;place-items:center;font-size:28px}
+.item .meta{flex:1;min-width:0}
+.item .t{font-weight:650;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.item .s{color:var(--dim);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .dist{text-align:right;font-weight:650;font-size:14px;flex:none}
+.item .dist small{display:block;color:var(--dim);font-weight:400;font-size:11px}
+.badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;color:#111;white-space:nowrap}
+.tag{font-size:11px;padding:1px 6px;border-radius:6px;border:1px solid var(--line);color:var(--dim)}
+.tag.ins{color:#c7e59f;border-color:#4d6b2c}
+.empty{color:var(--dim);text-align:center;padding:26px 16px;line-height:1.6}
+
+.fm{display:flex;flex-direction:column;align-items:center;transform:translateY(-6px)}
+.fm .b{width:34px;height:34px;border-radius:50%;border:3px solid;display:grid;place-items:center;font-size:19px;background:#11130e;box-shadow:0 3px 8px #000b}
+.fm.off .b{filter:grayscale(.8);opacity:.7}
+.fm .lbl{margin-top:2px;background:#000c;color:#fff;font-size:10.5px;font-weight:700;padding:1px 5px;border-radius:5px;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.fm.sel .b{outline:3px solid #fff;outline-offset:1px}
+.me-dot{width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 6px #3b82f640}
+.hist-dot{width:22px;height:22px;border-radius:50%;border:2px solid #fff;font-size:12px;display:grid;place-items:center;background:#11130ecc}
+
+#modal{position:fixed;inset:0;z-index:2000;background:#000a;display:none;align-items:flex-end;justify-content:center}
+#modal.open{display:flex}
+.card{background:var(--panel);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(18px + var(--safe-b));border:1px solid var(--line)}
+@media(min-width:700px){#modal{align-items:center}.card{border-radius:18px}}
+.card h2{margin:0 0 4px;font-size:20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2.st{font:400 22px var(--stencil);color:var(--brass)}
+.card .sub{color:var(--dim);font-size:13px;margin-bottom:12px}
+.row{display:flex;gap:10px}
+.row > *{flex:1}
+label.f{display:block;font-size:12px;color:var(--dim);margin:12px 0 5px;text-transform:uppercase;letter-spacing:.6px}
+.in{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+textarea.in{min-height:64px;resize:vertical}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:7px 11px;font-size:13px;display:flex;gap:5px;align-items:center}
+.seg button.on{border-color:var(--brass);background:#3a3218}
+.kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;max-height:230px;overflow-y:auto;padding:2px}
+.kinds button{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:8px 4px;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1.15;text-align:center}
+.kinds button .e{font-size:24px}
+.kinds button.on{border-color:var(--brass);background:#3a3218}
+.kinds button.ins::after{content:"in season";font-size:9px;color:#c7e59f}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.btn{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:11px 14px;font-weight:600;flex:1;min-width:120px;text-align:center;text-decoration:none;color:var(--text)}
+.btn.pri{background:var(--brass);border-color:var(--brass2);color:#1a1405}
+.btn.dan{color:#fca5a5;border-color:#7f1d1d}
+.btn.sm{flex:none;min-width:0;padding:8px 12px;font-size:13px}
+.photos{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
+.photos .ph{position:relative;flex:none}
+.photos img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.photos .x{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:#000;border:1px solid #555;font-size:12px;line-height:20px;text-align:center}
+.addph{width:96px;height:96px;border-radius:10px;border:1px dashed #5f6650;display:grid;place-items:center;color:var(--dim);font-size:13px;text-align:center;flex:none;cursor:pointer}
+.locbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.timeline{margin:6px 0 0;padding:0;list-style:none}
+.timeline li{position:relative;padding:0 0 12px 22px;border-left:2px solid var(--line);margin-left:6px}
+.timeline li:last-child{border-left-color:transparent}
+.timeline li::before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--c,#888);border:2px solid var(--panel)}
+.timeline .when{font-size:12px;color:var(--dim)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:14px;margin:10px 0}
+.kv > span:nth-child(odd){color:var(--dim)}
+.bigphoto{width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin-bottom:10px;border:1px solid var(--line)}
+.warn{background:#3a1d14;border:1px solid #7a3420;color:#f6c7b5;border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0}
+.tip{background:#1f2a18;border:1px solid #3f5a2a;color:#d4e8bd;border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0}
+.months{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;margin-top:4px}
+.months span{height:16px;border-radius:3px;background:#2c3124;font-size:9px;display:grid;place-items:center;color:#6d715f}
+.months span.on{background:#4d6b2c;color:#d9efbd}
+.months span.now{outline:2px solid var(--brass)}
+.tod{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:4px}
+.tod div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px;text-align:center;font-size:12px;color:var(--dim)}
+.tod div b{display:block;font-size:18px;color:var(--text)}
+.tod div.top{border-color:var(--brass)}
+.cal-row{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid #2a2e22;font-size:13px}
+.cal-g{font:400 15px var(--stencil);color:var(--brass);margin:14px 0 4px}
+
+#banner{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--safe-t) + 92px);z-index:900;background:var(--brass);color:#1a1405;font-weight:700;
+  padding:10px 14px;border-radius:12px;box-shadow:0 6px 18px #000a;display:none;gap:10px;align-items:center;max-width:92vw}
+#banner.show{display:flex}
+#banner button{background:#1a1405;color:#fff;border:0;border-radius:8px;padding:6px 10px;font-weight:700}
+#cross{position:fixed;left:50%;top:50%;z-index:800;width:40px;height:40px;margin:-20px 0 0 -20px;pointer-events:none;display:none}
+#cross.show{display:block}
+#toast{position:fixed;left:50%;top:calc(var(--safe-t) + 96px);transform:translateX(-50%);z-index:3000;background:#000d;color:#fff;padding:9px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+
+#finder{position:fixed;inset:0;z-index:2500;background:radial-gradient(circle at 50% 40%,#252c1a,#0b0c09);display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+#finder.open{display:flex}
+#finder .ftitle{font:400 26px var(--stencil);color:var(--brass)}
+#finder .fsub{color:var(--dim);margin-top:4px}
+#arrowWrap{width:240px;height:240px;margin:28px 0 18px;border-radius:50%;border:2px solid #444b36;display:grid;place-items:center;position:relative;background:#00000040}
+#arrowWrap .n{position:absolute;top:6px;left:50%;transform:translateX(-50%);color:var(--dim);font-weight:700;font-size:12px}
+#arrow{width:150px;height:150px;transition:transform .25s ease-out}
+#fdist{font-size:54px;font-weight:800;letter-spacing:-1px}
+#fdir{color:var(--dim);font-size:15px;margin-top:2px}
+#fhint{color:var(--dim);font-size:13px;margin-top:14px;max-width:340px}
+#finder.close #arrowWrap{border-color:var(--moss);box-shadow:0 0 40px #7fa65066}
+#finder .btns{width:100%;max-width:420px}
+
+.menu-list button{display:block;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px;font-weight:600}
+.menu-list button small{display:block;color:var(--dim);font-weight:400;font-size:12px;margin-top:2px}
+.note{font-size:12px;color:var(--dim);margin-top:10px;line-height:1.5}
+</style>
+</head>
+<body class="grim">
+<div id="map"></div>
+
+<div id="top">
+  <div class="brand">
+    <h1>☢ LAST PANTRY <small id="regionLbl">food finder</small></h1>
+    <button class="iconbtn" id="layerBtn" title="Map style">🛰️</button>
+    <button class="iconbtn" id="menuBtn" title="Menu">☰</button>
+  </div>
+  <div id="chips"></div>
+</div>
+
+<div id="banner"><span id="bannerText"></span><button id="bannerOk">Set here</button><button id="bannerCancel">Cancel</button></div>
+<svg id="cross" viewBox="0 0 40 40"><circle cx="20" cy="20" r="7" fill="none" stroke="#c9a24a" stroke-width="3"/><path d="M20 0v12M20 28v12M0 20h12M28 20h12" stroke="#c9a24a" stroke-width="3"/></svg>
+
+<div id="fabs">
+  <button class="fab" id="trailBtn" title="Show all movement trails">〰️</button>
+  <button class="fab" id="fitBtn" title="Show all spots">⤢</button>
+  <button class="fab" id="meBtn" title="My location">📍</button>
+  <button class="fab main" id="addBtn" title="Mark a food source">＋</button>
+</div>
+
+<div id="sheet">
+  <div class="grab" id="grab">
+    <div class="bar"></div>
+    <input id="q" placeholder="Search deer, walnut, asparagus…" autocomplete="off">
+    <select id="sort">
+      <option value="near">Nearest</option>
+      <option value="season">In season</option>
+      <option value="recent">Recent</option>
+      <option value="name">Name</option>
+    </select>
+  </div>
+  <div id="list"></div>
+</div>
+
+<div id="modal"><div class="card" id="card"></div></div>
+
+<div id="finder">
+  <div class="ftitle" id="ftitle">Spot</div>
+  <div class="fsub" id="fsub"></div>
+  <div id="arrowWrap"><span class="n">N</span>
+    <svg id="arrow" viewBox="0 0 100 100"><path d="M50 6 L80 86 L50 68 L20 86 Z" fill="#c9a24a" stroke="#1a1405" stroke-width="3" stroke-linejoin="round"/></svg>
+  </div>
+  <div id="fdist">—</div>
+  <div id="fdir">Waiting for GPS…</div>
+  <div id="fhint"></div>
+  <div class="btns">
+    <button class="btn" id="compassBtn">🧭 Use compass</button>
+    <a class="btn" id="fApple" target="_blank" rel="noopener">Apple Maps</a>
+    <a class="btn" id="fGoogle" target="_blank" rel="noopener">Google Maps</a>
+    <button class="btn pri" id="fFound">✅ I'm here</button>
+    <button class="btn" id="fClose">Close</button>
+  </div>
+</div>
+
+<input type="file" id="photoIn" accept="image/*" capture="environment" hidden>
+<input type="file" id="importIn" accept=".json,application/json" hidden>
+<div id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- catalog ---------- */
+const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
+const GROUPS = {
+  game:   {label:'Big game',     emoji:'🦌', color:'#b5552b', animal:true},
+  small:  {label:'Small game',   emoji:'🐇', color:'#d97a3a', animal:true},
+  birds:  {label:'Birds',        emoji:'🦃', color:'#c08a3e', animal:true},
+  fish:   {label:'Fish & water life', emoji:'🐟', color:'#3f8fb5', animal:true},
+  crops:  {label:'Crops & fields', emoji:'🌽', color:'#d6b43c'},
+  fruit:  {label:'Fruit & berries', emoji:'🍎', color:'#c2405a'},
+  nuts:   {label:'Nut trees',    emoji:'🌰', color:'#8a5a2b'},
+  wild:   {label:'Wild greens & roots', emoji:'🌿', color:'#6fa84a'},
+  fungi:  {label:'Mushrooms',    emoji:'🍄', color:'#9c6bc4'},
+  water:  {label:'Water',        emoji:'💧', color:'#3b82f6'},
+  cache:  {label:'Caches & stock', emoji:'🥫', color:'#8f8f7a'}
+};
+const MUSH_WARN='Only eat mushrooms you can identify with 100% certainty. Deadly look-alikes exist. Check with an experienced local forager.';
+const PLANT_WARN='Be sure of your ID. Some plants have toxic look-alikes.';
+const K = [
+  // id, name, emoji, group, months, tip, warn
+  ['deer','Deer','🦌','game',ALL,'Most active at dawn & dusk. Log each sighting to learn their trails and bedding areas.'],
+  ['elk','Elk','🫎','game',ALL,'Large herds; also red deer / wapiti.'],
+  ['hog','Wild boar / feral hogs','🐗','game',ALL,'Wallows and rooting signs near water.'],
+  ['bear','Bear','🐻','game',[4,5,6,7,8,9,10,11],'Avoid sows with cubs. Secure food stores.'],
+  ['rabbit','Rabbits','🐇','small',ALL,'Brushy field edges, brush piles.'],
+  ['squirrel','Squirrels','🐿️','small',ALL,'Near nut trees, especially in fall.'],
+  ['raccoon','Raccoon / opossum','🦝','small',ALL,'Mostly at night near water and corn.'],
+  ['turkey','Wild turkey','🦃','birds',ALL,'Roost in tall trees at night; feed in fields in the morning.'],
+  ['ducks','Ducks & geese','🦆','birds',ALL,'Marshes, ponds, harvested corn fields.'],
+  ['grouse','Grouse / pheasant','🐦','birds',ALL,'Young aspen, field edges.'],
+  ['eggs','Bird nests / eggs','🥚','birds',[4,5,6],'Wild bird eggs are protected in normal times.'],
+  ['chickens','Chickens / livestock','🐔','birds',ALL,'Farm animals. Note the owner.'],
+  ['fish','Fishing spot','🐟','fish',ALL,'Note the species and the best bait in your notes.'],
+  ['panfish','Panfish (bluegill/perch)','🐠','fish',ALL,'Ice fishing in winter.'],
+  ['crayfish','Crayfish','🦞','fish',[5,6,7,8,9],'Under rocks in creeks. Cook thoroughly.'],
+  ['frogs','Bullfrogs','🐸','fish',[5,6,7,8,9],'Pond edges at night.'],
+  ['corn','Corn field','🌽','crops',[8,9,10,11],'Sweet corn: Aug. Field corn dries on the stalk into winter, so grind it.'],
+  ['soy','Soybeans','🫘','crops',[9,10],'Must be cooked well.'],
+  ['wheat','Wheat / grain','🌾','crops',[7,8],'Harvest when heads are golden & hard.'],
+  ['potato','Potatoes','🥔','crops',[8,9,10]],
+  ['squash','Pumpkins / squash','🎃','crops',[9,10,11],'Store well for months in a cool place.'],
+  ['garden','Garden / farm stand','🥕','crops',[6,7,8,9,10]],
+  ['sugarbeet','Sugar beets','🟣','crops',[9,10,11],'Can be boiled down to syrup.'],
+  ['apple','Apple trees','🍎','fruit',[8,9,10],'Old farmstead & roadside trees. Apples keep for months.'],
+  ['pear','Pear trees','🍐','fruit',[8,9,10]],
+  ['cherry','Cherries','🍒','fruit',[6,7]],
+  ['plum','Plums','🟪','fruit',[8,9]],
+  ['strawberry','Wild strawberries','🍓','fruit',[6]],
+  ['raspberry','Raspberries / blackberries','🫐','fruit',[7,8],'Sunny fence lines & clearings.'],
+  ['blueberry','Blueberries','🫐','fruit',[7,8],'Sandy, acidic soils and jack pine areas.'],
+  ['mulberry','Mulberries','🍇','fruit',[6,7]],
+  ['grape','Wild grapes','🍇','fruit',[9,10],PLANT_WARN+' Moonseed looks similar.', true],
+  ['elder','Elderberries','🫐','fruit',[8,9],'Cook before eating. Raw berries, stems & leaves can make you sick.',true],
+  ['pawpaw','Pawpaw','🥭','fruit',[9],'River bottoms in the eastern US.'],
+  ['walnut','Walnut trees','🌰','nuts',[9,10],'Hull wearing gloves (stains). Dry for 2–3 weeks.'],
+  ['hickory','Hickory nuts','🌰','nuts',[9,10],'Shagbark is best. Rich fat & calories.'],
+  ['acorn','Oak / acorns','🌰','nuts',[9,10,11],'Leach tannins in water before eating. Also deer & turkey magnet.'],
+  ['hazel','Hazelnuts','🌰','nuts',[8,9]],
+  ['beech','Beechnuts','🌰','nuts',[9,10]],
+  ['chestnut','Chestnuts','🌰','nuts',[9,10]],
+  ['maple','Sugar maple (sap)','🍁','nuts',[2,3],'Tap when days are above freezing & nights below. About 40 gal sap → 1 gal syrup.'],
+  ['asparagus','Wild asparagus','🌱','wild',[4,5,6],'Look for last year’s dead brown stalks in ditches, then come back in spring.'],
+  ['ramps','Ramps / wild leeks','🧄','wild',[4,5],'Harvest only a few per patch so it comes back.'],
+  ['fiddle','Fiddleheads','🌿','wild',[4,5],'Ostrich fern only. Cook well.',true],
+  ['dandelion','Dandelion','🌼','wild',[3,4,5,6,7,8,9,10],'Leaves, flowers, roots all edible.'],
+  ['cattail','Cattails','🌾','wild',ALL,'Shoots in spring, pollen in early summer, roots all year. Only take from clean water.'],
+  ['sunchoke','Sunchokes','🌻','wild',[10,11,12,1,2,3],'Dig tubers after frost.'],
+  ['wildrice','Wild rice','🍚','wild',[8,9],'Shallow lakes & slow rivers.'],
+  ['lambsq','Lamb’s quarters / purslane','🥬','wild',[5,6,7,8,9]],
+  ['nettle','Stinging nettle','🌿','wild',[4,5,6],'Wear gloves. Cooking removes the sting.'],
+  ['morel','Morels','🍄','fungi',[4,5],MUSH_WARN,true],
+  ['chanterelle','Chanterelles','🍄','fungi',[7,8,9],MUSH_WARN,true],
+  ['chicken','Chicken of the woods','🍄','fungi',[7,8,9,10],MUSH_WARN,true],
+  ['oyster','Oyster mushrooms','🍄','fungi',[4,5,6,7,8,9,10,11],MUSH_WARN,true],
+  ['puffball','Puffballs','🍄','fungi',[8,9,10],MUSH_WARN+' Must be pure white inside.',true],
+  ['spring','Spring / creek','💧','water',ALL,'Always boil or filter.'],
+  ['pond','Pond / lake','🌊','water',ALL,'Always boil or filter.'],
+  ['well','Well / pump','🚰','water',ALL],
+  ['rain','Rain catch','🌧️','water',ALL],
+  ['store','Store / supply cache','🥫','cache',ALL,'Note what is left and who else knows about it.'],
+  ['honey','Beehive / honey','🍯','cache',[7,8,9]],
+  ['salt','Salt / feed store','🧂','cache',ALL],
+  ['other','Other food','❓','cache',ALL]
+  // ---- regional extras (months are northern-temperate unless local:true) ----
+  ,['moose','Moose','🫎','game',ALL,'Willow swamps and lake edges.']
+  ,['caribou','Caribou / reindeer','🦌','game',ALL,'They migrate. Log sightings to learn their route.']
+  ,['goat','Wild goats','🐐','game',ALL,'Rocky hills and scrub.']
+  ,['kangaroo','Kangaroo / wallaby','🦘','game',ALL,'Feed at dawn and dusk on grassy flats.']
+  ,['antelope','Antelope / springbok','🦌','game',ALL,'Open plains near water holes.']
+  ,['javelina','Javelina','🐗','game',ALL,'Desert washes and prickly pear patches.']
+  ,['guanaco','Guanaco','🦙','game',ALL,'Open steppe and Patagonian grassland.']
+  ,['iguana','Iguanas / lizards','🦎','small',ALL,'Sun themselves on rocks and branches in the morning.']
+  ,['insects','Insects / grubs','🐛','small',[5,6,7,8,9],'High protein. Always cook them. Avoid brightly colored or hairy ones.',true]
+  ,['pigeon','Pigeons / doves','🕊️','birds',ALL,'Towns, grain silos, barns.']
+  ,['guineafowl','Guinea fowl','🐦','birds',ALL,'Flocks near water at dusk.']
+  ,['ptarmigan','Ptarmigan','🐦','birds',ALL,'Willow thickets and open tundra.']
+  ,['salmon','Salmon run','🐟','fish',[7,8,9,10],'Runs up rivers at the same time each year. Log the dates.']
+  ,['shellfish','Mussels / clams / oysters','🦪','fish',ALL,'Toxic algae (red tide) can make shellfish deadly. Check local warnings and avoid water near sewage or runoff.',true]
+  ,['crab','Crabs','🦀','fish',ALL,'Tide pools, mangroves, beaches at night.']
+  ,['seaweed','Seaweed','🌿','fish',ALL,'Harvest growing (not washed-up) weed from clean water.']
+  ,['snails','Snails','🐌','small',[4,5,6,9,10],'Purge for days and cook thoroughly.',true]
+  ,['rice','Rice paddy','🍚','crops',[9,10]]
+  ,['cassava','Cassava','🥔','crops',ALL,'Never eat raw. Peel, soak and cook it thoroughly to remove natural toxins.',true]
+  ,['sugarcane','Sugarcane','🎋','crops',ALL,'Chew or press for juice; boil down for sugar.']
+  ,['taro','Taro','🥔','crops',ALL,'Must be cooked well. Raw taro irritates the mouth and throat.',true]
+  ,['coconut','Coconut palms','🥥','fruit',ALL,'Green nuts for water, brown for meat.']
+  ,['banana','Banana / plantain','🍌','fruit',ALL,'Cut the whole bunch green; it ripens off the plant.']
+  ,['mango','Mango','🥭','fruit',[3,4,5,6,7]]
+  ,['papaya','Papaya','🍈','fruit',ALL]
+  ,['breadfruit','Breadfruit / jackfruit','🍈','fruit',[6,7,8,9,10],'Roast or boil. Very filling.']
+  ,['citrus','Citrus trees','🍋','fruit',[11,12,1,2,3],'Keeps on the tree for weeks.']
+  ,['fig','Figs','🟤','fruit',[7,8,9]]
+  ,['olive','Olives','🫒','fruit',[10,11,12],'Bitter raw. Cure them in brine or lye water first.']
+  ,['pricklypear','Prickly pear','🌵','fruit',[7,8,9],'Burn or scrape off the spines. Young pads (nopales) are edible too.']
+  ,['dates','Date palms','🌴','fruit',[8,9,10]]
+  ,['cloudberry','Cloudberries / lingonberries','🫐','fruit',[7,8,9],'Bogs and tundra. Lingonberries keep all winter.']
+  ,['quandong','Quandong / bush fruit','🍑','fruit',[11,12,1],'',false,true]
+  ,['marula','Marula','🍈','fruit',[1,2,3],'',false,true]
+  ,['pinyon','Pinyon pine nuts','🌲','nuts',[9,10],'Shake cones onto a tarp before the birds get them.']
+  ,['mesquite','Mesquite pods','🌿','nuts',[7,8,9],'Grind dry pods into sweet flour.']
+  ,['macadamia','Macadamia','🌰','nuts',[3,4,5,6,7],'',false,true]
+  ,['araucaria','Araucaria / monkey-puzzle nuts','🌲','nuts',[3,4,5],'Boil or roast.',false,true]
+  ,['baobab','Baobab','🌳','nuts',[4,5,6,7,8],'Dry fruit pulp is rich in vitamin C. The seeds are edible.',false,true]
+  ,['ginkgo','Ginkgo nuts','🌳','nuts',[10,11],'Eat only a few, and only cooked. Larger amounts are toxic.',true]
+  ,['wildgarlic','Wild garlic','🧄','wild',[3,4,5],PLANT_WARN+' Lily of the valley and autumn crocus look similar and are deadly. Wild garlic smells of garlic.',true]
+  ,['bamboo','Bamboo shoots','🎋','wild',[4,5,6],'Peel and boil them well before eating.',true]
+  ,['agave','Agave / yucca','🌵','wild',[4,5,6],'The hearts must be pit-roasted for a long time.',true]
+].map(([id,name,emoji,group,months,tip,warn,local])=>({id,name,emoji,group,months,tip:tip||'',warn:!!warn,local:!!local}));
+
+/* ---------- regions ---------- */
+// zone tags each kind can live in; regions list the zones they include
+const KZ = {
+  deer:'all',elk:'tn sub',hog:'all',bear:'tn sub',rabbit:'all',squirrel:'tn med asia',raccoon:'na',turkey:'na nz',ducks:'all',grouse:'tn sub med',
+  eggs:'all',chickens:'all',fish:'all',panfish:'tn warm',crayfish:'tn warm au med',frogs:'tn warm trop med asia',
+  corn:'tn warm af sam trop med asia',soy:'tn warm sam asia',wheat:'tn warm med au sam asia',potato:'tn sam sub warm',squash:'tn warm sam af trop med',garden:'all',sugarbeet:'tn',
+  apple:'tn sub med au sam asia',pear:'tn med au sam asia',cherry:'tn med asia',plum:'tn med asia au',strawberry:'tn sub med',raspberry:'tn sub med au sam',
+  blueberry:'tn sub',mulberry:'tn warm med asia',grape:'tn warm med',elder:'tn med',pawpaw:'na',
+  walnut:'tn warm med asia',hickory:'na',acorn:'tn med warm asia desert',hazel:'tn med asia',beech:'tn',chestnut:'tn med asia',maple:'na',
+  asparagus:'tn med',ramps:'na',fiddle:'tn sub',dandelion:'all',cattail:'all',sunchoke:'tn',wildrice:'na',lambsq:'all',nettle:'tn sub med',
+  morel:'tn med asia',chanterelle:'tn sub med asia',chicken:'tn warm',oyster:'all',puffball:'tn warm med sub',
+  moose:'sub na',caribou:'sub',goat:'nz au med desert af trop',kangaroo:'au',antelope:'af desert',javelina:'desert',guanaco:'sam',iguana:'trop',insects:'all',
+  pigeon:'all',guineafowl:'af',ptarmigan:'sub',salmon:'salmon',shellfish:'coast',crab:'coast trop',seaweed:'coast',snails:'med eu',
+  rice:'asia trop warm',cassava:'trop af',sugarcane:'trop warm',taro:'trop',coconut:'trop',banana:'trop',mango:'trop',papaya:'trop',breadfruit:'trop',
+  citrus:'med warm trop af au',fig:'med warm desert',olive:'med',pricklypear:'desert med af au',dates:'desert',cloudberry:'sub',quandong:'au',marula:'af',
+  pinyon:'desert',mesquite:'desert',macadamia:'au',araucaria:'sam',baobab:'af',ginkgo:'asia',wildgarlic:'eu asia',bamboo:'asia trop',agave:'desert'
+};
+K.forEach(k=>k.zones=(KZ[k.id]||'all').split(' '));
+const REGIONS = {
+  mi:   {name:'Great Lakes / Michigan',        zones:'tn na',               shift:0,  c:[43.3,-84.6],z:7},
+  nus:  {name:'Northern US & southern Canada', zones:'tn na',               shift:0,  c:[46,-95],z:4},
+  nea:  {name:'US Northeast & Appalachia',     zones:'tn na coast',         shift:0,  c:[41.5,-76],z:6},
+  sus:  {name:'US South & Southeast',          zones:'tn na warm coast',    shift:-1, c:[33,-86],z:5},
+  sw:   {name:'US Southwest & Mexico desert',  zones:'desert warm na',      shift:-1, c:[32.5,-110],z:5},
+  pnw:  {name:'Pacific Northwest & BC',        zones:'tn na coast salmon',  shift:0,  c:[46.5,-122],z:6},
+  sub:  {name:'Subarctic (Alaska, N Canada, Scandinavia, Siberia)', zones:'sub coast salmon', shift:1, c:[64,-150],z:4},
+  uk:   {name:'UK & Ireland',                  zones:'tn eu coast',         shift:0,  c:[54,-3],z:5},
+  eu:   {name:'Central & Northern Europe',     zones:'tn eu',               shift:0,  c:[50,12],z:4},
+  med:  {name:'Mediterranean',                 zones:'med warm eu coast',   shift:-1, c:[40,15],z:4},
+  asia: {name:'East Asia (temperate)',         zones:'tn asia coast',       shift:0,  c:[36,128],z:4},
+  au:   {name:'Australia (south & east)',      zones:'au warm coast',    shift:6,  c:[-33,147],z:4},
+  nz:   {name:'New Zealand',                   zones:'tn nz coast',         shift:6,  c:[-41,174],z:5},
+  sam:  {name:'South America (temperate)',     zones:'sam tn warm coast',   shift:6,  c:[-35,-65],z:4},
+  af:   {name:'Southern Africa',               zones:'af warm coast',       shift:6,  c:[-28,26],z:4},
+  trop: {name:'Tropics (worldwide)',           zones:'trop coast warm',     shift:0,  c:[5,0],z:2}
+};
+Object.values(REGIONS).forEach(r=>r.zones=r.zones.split(' '));
+const R = () => REGIONS[S.region] || REGIONS.mi;
+function monthsFor(k){ if(k.local||k.months.length===12) return k.months; const sh=R().shift; return k.months.map(m=>((m-1+sh+24)%12)+1); }
+const avail = k => k.zones.includes('all') || k.zones.some(z=>R().zones.includes(z));
+const availK = () => K.filter(avail);
+function guessRegion(lat,lng){
+  const a=Math.abs(lat);
+  if(a<23.5) return 'trop';
+  if(lat<0){ if(lng>160||lng<-170) return 'nz'; if(lng>110) return 'au'; if(lng>-30&&lng<60) return 'af'; return 'sam'; }
+  if(lat>58) return 'sub';
+  if(lng<-50){ // North America
+    if(lng<-115&&lat>42) return 'pnw';
+    if(lng<-100&&lat<38) return 'sw';
+    if(lat<36.5) return 'sus';
+    if(lng>-80) return 'nea';
+    if(lng>-91&&lat>41) return 'mi';
+    return 'nus'; }
+  if(lng>=-12&&lng<45){ if(lng<2&&lat>49.5) return 'uk'; if(lat<44.5) return 'med'; return 'eu'; }
+  if(lng>=45&&lng<75&&lat<40) return 'med';
+  return 'asia';
+}
+const KIND = Object.fromEntries(K.map(k=>[k.id,k]));
+
+const STATUS = {
+  seen:      {label:'Seen here', color:'#c9a24a', emoji:'👀'},
+  ready:     {label:'Ready now', color:'#7fa650', emoji:'✅'},
+  growing:   {label:'Not ripe yet', color:'#5f9ea0', emoji:'🌱'},
+  harvested: {label:'Harvested', color:'#d08a3a', emoji:'🧺'},
+  depleted:  {label:'Picked clean / gone', color:'#6b6b5f', emoji:'☠️'}
+};
+const KEY='last-pantry-v1';
+const MONTHS=['J','F','M','A','M','J','J','A','S','O','N','D'];
+const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const curMonth = () => new Date().getMonth()+1;
+
+/* ---------- storage ---------- */
+let db=null;
+function idbOpen(){ return new Promise(res=>{ try{ const r=indexedDB.open('last-pantry',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>res(null);}catch(e){res(null)} }); }
+function idbGet(k){ return new Promise(res=>{ try{ const r=db.transaction('kv').objectStore('kv').get(k); r.onsuccess=()=>res(r.result); r.onerror=()=>res(null);}catch(e){res(null)} }); }
+function idbSet(k,v){ return new Promise(res=>{ try{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').put(v,k); t.oncomplete=()=>res(true); t.onerror=()=>res(false);}catch(e){res(false)} }); }
+let S={spots:[],layer:'street',grim:true};
+let saveTimer=null;
+function save(){ clearTimeout(saveTimer); saveTimer=setTimeout(async()=>{ let ok=false; if(db) ok=await idbSet(KEY,JSON.stringify(S));
+  if(!ok){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){ toast('⚠️ Storage full: back up, then remove some photos'); } } },150); }
+async function load(){ db=await idbOpen(); let raw=db?await idbGet(KEY):null; if(!raw){ try{ raw=localStorage.getItem(KEY);}catch(e){} }
+  if(raw){ try{ S=Object.assign(S,JSON.parse(raw)); }catch(e){} } }
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2300); }
+function haversine(a,b){ const R=6371000,r=Math.PI/180,dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r; const h=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+function bearing(a,b){ const r=Math.PI/180,y=Math.sin((b.lng-a.lng)*r)*Math.cos(b.lat*r),x=Math.cos(a.lat*r)*Math.sin(b.lat*r)-Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lng-a.lng)*r); return (Math.atan2(y,x)/r+360)%360; }
+function fmtDist(m){ if(m==null||isNaN(m)) return '—'; const ft=m*3.28084; if(ft<1000) return Math.round(ft)+' ft'; const mi=m/1609.344; return (mi<10?mi.toFixed(1):Math.round(mi))+' mi'; }
+const DIRS=['N','NE','E','SE','S','SW','W','NW']; const compass=d=>DIRS[Math.round(d/45)%8];
+function ago(t){ const s=(Date.now()-t)/1000; if(s<60) return 'just now'; if(s<3600) return Math.floor(s/60)+'m ago'; if(s<86400) return Math.floor(s/3600)+'h ago'; const d=Math.floor(s/86400); if(d<30) return d+'d ago'; return new Date(t).toLocaleDateString(); }
+const fmtTime=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+const last=p=>p.history[p.history.length-1];
+const pos=p=>{ const h=last(p); return h?{lat:h.lat,lng:h.lng}:null; };
+const getS=id=>S.spots.find(p=>p.id===id);
+const kindOf=p=>KIND[p.kind]||KIND.other;
+const groupOf=p=>GROUPS[kindOf(p).group];
+const isAnimal=p=>!!groupOf(p).animal;
+const inSeason=p=>monthsFor(kindOf(p)).includes(curMonth());
+const nameOf=p=>p.name || kindOf(p).name;
+function todBucket(t){ const h=new Date(t).getHours(); return h>=4&&h<9?0: h>=9&&h<16?1: h>=16&&h<21?2:3; }
+const TOD=['🌅 Dawn','☀️ Day','🌇 Dusk','🌙 Night'];
+function monthsBar(months){ const n=curMonth(); return `<div class="months">${MONTHS.map((m,i)=>`<span class="${months.includes(i+1)?'on':''} ${n===i+1?'now':''}">${m}</span>`).join('')}</div>`; }
+function seasonText(k){ const m=monthsFor(k); if(m.length===12) return 'Year-round'; return m.map(x=>MONTH_NAMES[x-1].slice(0,3)).join(', '); }
+
+/* ---------- map ---------- */
+if(typeof L==='undefined'){ document.body.innerHTML='<div style="padding:40px;text-align:center;color:#eee;font-family:sans-serif">The map library could not load. Connect to the internet once and reload. After that it works offline.</div>'; return; }
+const map=L.map('map',{zoomControl:false,maxZoom:21}).setView([43.3,-84.6],7);
+const layers={
+  street:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxNativeZoom:19,maxZoom:21,attribution:'© OpenStreetMap'}),
+  sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxNativeZoom:19,maxZoom:21,attribution:'Imagery © Esri'})
+};
+function setLayer(n){ Object.values(layers).forEach(l=>map.removeLayer(l)); layers[n].addTo(map); S.layer=n; $('#layerBtn').textContent=n==='sat'?'🗺️':'🛰️'; save(); }
+const markerLayer=L.layerGroup().addTo(map), trailLayer=L.layerGroup().addTo(map);
+let selectedId=null, showAllTrails=false, groupFilter=new Set(), seasonOnly=false, hideDepleted=true;
+
+function markerIcon(p){ const g=groupOf(p), k=kindOf(p), off=!inSeason(p)||p.status==='depleted';
+  return L.divIcon({className:'',iconSize:[34,50],iconAnchor:[17,34],
+    html:`<div class="fm ${off?'off':''} ${p.id===selectedId?'sel':''}"><div class="b" style="border-color:${g.color}">${k.emoji}</div><div class="lbl">${esc(nameOf(p))}${p.count>1?' ×'+p.count:''}</div></div>`}); }
+function visible(p){
+  if(groupFilter.size && !groupFilter.has(kindOf(p).group)) return false;
+  if(seasonOnly && !inSeason(p)) return false;
+  if(hideDepleted && p.status==='depleted' && !groupFilter.size) return false;
+  return true;
+}
+function renderMarkers(){ markerLayer.clearLayers();
+  S.spots.forEach(p=>{ if(!visible(p)) return; const ps=pos(p); if(!ps) return;
+    L.marker([ps.lat,ps.lng],{icon:markerIcon(p),zIndexOffset:p.id===selectedId?1000:0}).addTo(markerLayer).on('click',()=>openDetail(p.id)); });
+  renderTrails(); }
+function renderTrails(){ trailLayer.clearLayers();
+  const ids=showAllTrails?S.spots.filter(visible).map(p=>p.id):(selectedId?[selectedId]:[]);
+  ids.forEach(id=>{ const p=getS(id); if(!p) return; const pts=p.history.filter(h=>h.type!=='status').map(h=>[h.lat,h.lng]);
+    const uniq=pts.filter((x,i)=>i===0||x[0]!==pts[i-1][0]||x[1]!==pts[i-1][1]); if(uniq.length<2) return;
+    const c=groupOf(p).color;
+    L.polyline(uniq,{color:'#000',weight:7,opacity:.45}).addTo(trailLayer);
+    L.polyline(uniq,{color:c,weight:4,opacity:.95,dashArray:'8 7'}).addTo(trailLayer);
+    p.history.slice(0,-1).forEach((h,i)=>{ if(h.type==='status') return;
+      L.marker([h.lat,h.lng],{icon:L.divIcon({className:'',iconSize:[22,22],iconAnchor:[11,11],html:`<div class="hist-dot" style="border-color:${c}">${h.type==='harvest'?'🧺':kindOf(p).emoji}</div>`})})
+        .bindTooltip(`${fmtTime(h.t)}${h.count?' · '+h.count+' seen':''}${h.amount?' · '+esc(h.amount):''}${h.note?' — '+esc(h.note):''}`).addTo(trailLayer); });
+  }); }
+
+/* ---------- GPS ---------- */
+let me=null, meMarker=null, meCircle=null, watchId=null, followMe=false, gpsWaiters=[];
+function startGPS(center){
+  if(!('geolocation' in navigator)){ toast('No GPS on this device/browser'); return; }
+  if(watchId!=null){ if(center&&me) map.setView([me.lat,me.lng],Math.max(map.getZoom(),17)); return; }
+  $('#meBtn').classList.add('live'); followMe=!!center;
+  watchId=navigator.geolocation.watchPosition(p=>{
+    me={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};
+    if(!meMarker){ meMarker=L.marker([me.lat,me.lng],{icon:L.divIcon({className:'',iconSize:[18,18],iconAnchor:[9,9],html:'<div class="me-dot"></div>'}),zIndexOffset:2000,interactive:false}).addTo(map);
+      meCircle=L.circle([me.lat,me.lng],{radius:me.acc,color:'#3b82f6',weight:1,fillOpacity:.1,interactive:false}).addTo(map); }
+    else{ meMarker.setLatLng([me.lat,me.lng]); meCircle.setLatLng([me.lat,me.lng]).setRadius(me.acc); }
+    if(followMe){ map.setView([me.lat,me.lng],Math.max(map.getZoom(),17)); followMe=false; }
+    if(!S.region){ setRegion(guessRegion(me.lat,me.lng),true,false); }
+    renderList(); updateFinder();
+    if(gpsWaiters.length){ const w=gpsWaiters; gpsWaiters=[]; w.forEach(f=>f(me)); }
+  },err=>{ $('#meBtn').classList.remove('live'); watchId=null;
+    toast(err.code===1?'Location permission denied. Allow it in settings.':'Could not get a GPS fix');
+    if(gpsWaiters.length){ const w=gpsWaiters; gpsWaiters=[]; w.forEach(f=>f(null)); } },
+  {enableHighAccuracy:true,maximumAge:3000,timeout:20000});
+}
+function getFix(){ return new Promise(res=>{ if(me) return res(me); gpsWaiters.push(res); startGPS(false); setTimeout(()=>res(me),15000); }); }
+
+/* ---------- chips & list ---------- */
+function renderChips(){
+  const counts={}; S.spots.forEach(p=>{ const g=kindOf(p).group; counts[g]=(counts[g]||0)+1; });
+  const ins=S.spots.filter(p=>inSeason(p)&&p.status!=='depleted').length;
+  let h=`<button class="chip ${groupFilter.size||seasonOnly?'':'on'}" data-f="">All <b>${S.spots.length}</b></button>`;
+  h+=`<button class="chip season ${seasonOnly?'on':''}" data-f="@season">🗓️ In season (${MONTH_NAMES[curMonth()-1].slice(0,3)}) <b>${ins}</b></button>`;
+  for(const g in GROUPS){ if(!counts[g]) continue; h+=`<button class="chip ${groupFilter.has(g)?'on':''}" data-f="${g}">${GROUPS[g].emoji} ${GROUPS[g].label} <b>${counts[g]}</b></button>`; }
+  $('#chips').innerHTML=h;
+}
+$('#chips').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return; const f=b.dataset.f;
+  if(!f){ groupFilter.clear(); seasonOnly=false; } else if(f==='@season') seasonOnly=!seasonOnly; else groupFilter.has(f)?groupFilter.delete(f):groupFilter.add(f);
+  refresh(); });
+
+function renderList(){
+  const q=$('#q').value.trim().toLowerCase(), sort=$('#sort').value;
+  let arr=S.spots.filter(visible).filter(p=>!q||[nameOf(p),kindOf(p).name,groupOf(p).label,p.notes,p.place,STATUS[p.status]?.label].join(' ').toLowerCase().includes(q));
+  arr=arr.map(p=>({p,d:me&&pos(p)?haversine(me,pos(p)):null}));
+  const lt=p=>last(p).t;
+  if(sort==='near') arr.sort((a,b)=>(a.d??1e12)-(b.d??1e12)||lt(b.p)-lt(a.p));
+  else if(sort==='season') arr.sort((a,b)=>(inSeason(b.p)-inSeason(a.p))||((b.p.status==='ready')-(a.p.status==='ready'))||(a.d??1e12)-(b.d??1e12));
+  else if(sort==='recent') arr.sort((a,b)=>lt(b.p)-lt(a.p));
+  else arr.sort((a,b)=>nameOf(a.p).localeCompare(nameOf(b.p)));
+  if(!arr.length){ $('#list').innerHTML=S.spots.length?'<div class="empty">Nothing matches.</div>':
+    `<div class="empty"><div style="font-size:40px">🦌🌽🌰🌱</div><b>Your map is empty.</b><br>Tap <b>＋</b> to mark food where you're standing,<br>or long-press the map to mark it anywhere.</div>`; return; }
+  $('#list').innerHTML=arr.map(({p,d})=>{ const k=kindOf(p), st=STATUS[p.status], ph=p.photos?.[0], ins=inSeason(p);
+    const sightings=p.history.filter(h=>h.type==='sighting').length;
+    return `<div class="item ${p.id===selectedId?'sel':''} ${(!ins||p.status==='depleted')?'off':''}" data-id="${p.id}">
+      <div class="thumb" style="${ph?`background-image:url(${ph})`:`background:${groupOf(p).color}33`}">${ph?'':k.emoji}</div>
+      <div class="meta"><div class="t">${esc(nameOf(p))}${p.count>1?` <span style="color:var(--dim)">×${p.count}</span>`:''} <span class="badge" style="background:${st.color}">${st.label}</span> ${ins?'<span class="tag ins">in season</span>':''}</div>
+      <div class="s">${esc([p.name?k.name:'',p.place].filter(Boolean).join(' · '))||esc(groupOf(p).label)}</div>
+      <div class="s">${isAnimal(p)&&sightings>1?`${sightings} sightings · `:''}${ago(last(p).t)}${p.notes?' · '+esc(p.notes):''}</div></div>
+      <div class="dist">${d!=null?fmtDist(d):''}<small>${me&&pos(p)?compass(bearing(me,pos(p))):''}</small></div></div>`; }).join('');
+}
+$('#list').addEventListener('click',e=>{ const it=e.target.closest('.item'); if(it) openDetail(it.dataset.id,true); });
+$('#q').addEventListener('input',renderList);
+$('#q').addEventListener('focus',()=>setSheet('max'));
+$('#sort').addEventListener('change',()=>{ if($('#sort').value==='near'&&!me) startGPS(false); renderList(); });
+
+let sheetState='mid';
+function setSheet(s){ sheetState=s; const sh=$('#sheet'); sh.classList.toggle('min',s==='min'); sh.classList.toggle('max',s==='max'); positionFabs(); }
+function positionFabs(){ $('#fabs').style.bottom=($('#sheet').getBoundingClientRect().height+12)+'px'; }
+$('#grab').addEventListener('click',e=>{ if(e.target.closest('input,select')) return; setSheet(sheetState==='min'?'mid':sheetState==='mid'?'max':'min'); });
+$('#sheet').addEventListener('transitionend',positionFabs);
+window.addEventListener('resize',positionFabs);
+map.on('dragstart',()=>{ if(sheetState==='max') setSheet('mid'); });
+function refresh(){ renderChips(); renderMarkers(); renderList(); }
+
+/* ---------- modal ---------- */
+function openModal(html){ $('#card').innerHTML=html; $('#modal').classList.add('open'); $('#card').scrollTop=0; }
+function closeModal(){ $('#modal').classList.remove('open'); }
+$('#modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
+
+/* ---------- photos ---------- */
+let photoCb=null;
+function pickPhoto(cb){ photoCb=cb; $('#photoIn').value=''; $('#photoIn').click(); }
+$('#photoIn').addEventListener('change',async e=>{ const f=e.target.files[0]; if(!f||!photoCb) return; try{ photoCb(await shrink(f)); }catch(err){ toast('Could not read that photo'); } });
+function shrink(file,max=900,q=.72){ return new Promise((res,rej)=>{ const url=URL.createObjectURL(file),img=new Image();
+  img.onload=()=>{ const s=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg',q)); }; img.onerror=rej; img.src=url; }); }
+
+/* ---------- editor ---------- */
+let draft=null, kindGroup=null;
+function openEditor(p,latlng){
+  const isNew=!p;
+  draft=isNew?{id:uid(),kind:null,name:'',count:1,status:'seen',place:'',notes:'',photos:[],history:[],_loc:latlng||null,_new:true}:JSON.parse(JSON.stringify(p));
+  draft._new=isNew; kindGroup=isNew?null:kindOf(draft).group;
+  drawEditor();
+}
+function drawEditor(){
+  const d=draft, k=d.kind?KIND[d.kind]:null, loc=d._new?d._loc:pos(d);
+  const groupBtns=Object.entries(GROUPS).filter(([g])=>availK().some(x=>x.group===g)).map(([g,G])=>`<button data-g="${g}" class="${kindGroup===g?'on':''}">${G.emoji} ${G.label}</button>`).join('');
+  const kinds=kindGroup?availK().filter(x=>x.group===kindGroup):availK().filter(x=>monthsFor(x).includes(curMonth())&&x.months.length<12);
+  openModal(`
+    <h2 class="st">${k?k.emoji:'＋'} ${d._new?'MARK FOOD':'EDIT '+esc(nameOf(d)).toUpperCase()}</h2>
+    <div class="sub">${d._new?'Saves this spot. Log sightings & harvests later to build its history.':'Change details. Use “Log visit” to add sightings, harvests or moves.'}</div>
+    <label class="f">What is it?</label>
+    <div class="seg" id="eGroups">${groupBtns}</div>
+    <div style="height:8px"></div>
+    ${!kindGroup?`<div class="note" style="margin:0 0 6px">In season now (${MONTH_NAMES[curMonth()-1]}). Pick a category above to see everything.</div>`:''}
+    <div class="kinds" id="eKinds">${kinds.map(x=>`<button data-k="${x.id}" class="${d.kind===x.id?'on':''} ${monthsFor(x).includes(curMonth())&&x.months.length<12?'ins':''}"><span class="e">${x.emoji}</span>${esc(x.name)}</button>`).join('')}</div>
+    ${k?`${k.warn?`<div class="warn">⚠️ ${esc(k.tip)}</div>`:k.tip?`<div class="tip">💡 ${esc(k.tip)}</div>`:''}
+      <div class="note" style="margin-top:4px">Season (${esc(R().name)}): ${seasonText(k)}</div>${monthsBar(monthsFor(k))}`:''}
+    <div class="row">
+      <div><label class="f">Nickname (optional)</label><input class="in" id="eName" placeholder="${k?esc(k.name)+' — e.g. “Big buck”, “Ditch by M-50”':'e.g. Old orchard'}" value="${esc(d.name)}"></div>
+      <div style="flex:.5"><label class="f">${k&&GROUPS[k.group].animal?'How many':'Count'}</label><input class="in" id="eCount" type="number" min="1" inputmode="numeric" value="${d.count}"></div>
+    </div>
+    <label class="f">Status</label>
+    <div class="seg" id="eStatus">${Object.entries(STATUS).map(([s,o])=>`<button data-v="${s}" class="${d.status===s?'on':''}">${o.emoji} ${o.label}</button>`).join('')}</div>
+    <label class="f">Place name (optional)</label>
+    <input class="in" id="ePlace" placeholder="e.g. Back 40, ditch on Clark Rd, creek bottom" value="${esc(d.place)}">
+    <label class="f">Notes</label>
+    <textarea class="in" id="eNotes" placeholder="Size, landowner, access, best time, how much is there…">${esc(d.notes)}</textarea>
+    <label class="f">Photos</label>
+    <div class="photos" id="ePhotos">${d.photos.map((ph,i)=>`<div class="ph"><img src="${ph}"><button class="x" data-i="${i}">✕</button></div>`).join('')}<div class="addph" id="eAddPh">📷<br>Add photo</div></div>
+    ${d._new?`<label class="f">Location</label>
+    <div class="locbox"><span id="eLoc">${loc?`${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`:'Getting GPS fix…'}</span>
+      <span><button class="btn sm" id="eGps">📍 My GPS</button> <button class="btn sm" id="ePick">🗺️ Pick on map</button></span></div>`:''}
+    <div class="btns"><button class="btn" id="eCancel">Cancel</button><button class="btn pri" id="eSave">${d._new?'Save spot':'Save changes'}</button></div>`);
+  $('#eGroups').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; syncDraft(); kindGroup=kindGroup===b.dataset.g?null:b.dataset.g; drawEditor(); });
+  $('#eKinds').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; syncDraft(); draft.kind=b.dataset.k; kindGroup=KIND[draft.kind].group;
+    if(draft._new) draft.status = GROUPS[kindGroup].animal ? 'seen' : (monthsFor(KIND[draft.kind]).includes(curMonth()) ? 'ready' : 'growing');
+    drawEditor(); });
+  $('#eStatus').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; syncDraft(); draft.status=b.dataset.v; drawEditor(); });
+  $('#eAddPh').onclick=()=>{ syncDraft(); pickPhoto(u=>{ draft.photos.push(u); drawEditor(); }); };
+  $('#ePhotos').addEventListener('click',e=>{ const x=e.target.closest('.x'); if(!x) return; syncDraft(); draft.photos.splice(+x.dataset.i,1); drawEditor(); });
+  $('#eCancel').onclick=()=>{ draft=null; closeModal(); };
+  $('#eSave').onclick=saveDraft;
+  if(d._new){
+    $('#eGps').onclick=async()=>{ syncDraft(); $('#eLoc').textContent='Getting GPS fix…'; const f=await getFix(); if(f&&draft){ draft._loc={lat:f.lat,lng:f.lng}; drawEditor(); } else toast('No GPS fix. Pick on the map instead.'); };
+    $('#ePick').onclick=()=>{ syncDraft(); closeModal(); pickOnMap('Drag the map to put the crosshair on the spot',ll=>{ draft._loc=ll; drawEditor(); },()=>drawEditor()); };
+    if(!loc) getFix().then(f=>{ if(f&&draft&&draft._new&&!draft._loc){ draft._loc={lat:f.lat,lng:f.lng}; const el=$('#eLoc'); if(el) el.textContent=`${f.lat.toFixed(6)}, ${f.lng.toFixed(6)}`; } });
+  }
+}
+function syncDraft(){ if(!draft||!$('#eName')) return; draft.name=$('#eName').value.trim(); draft.count=Math.max(1,parseInt($('#eCount').value)||1);
+  draft.place=$('#ePlace').value.trim(); draft.notes=$('#eNotes').value.trim(); }
+function saveDraft(){
+  syncDraft(); const d=draft;
+  if(!d.kind){ toast('Pick what it is first'); return; }
+  if(d._new){
+    if(!d._loc){ toast('Set a location first (GPS or pick on map)'); return; }
+    d.history=[{lat:d._loc.lat,lng:d._loc.lng,t:Date.now(),type:isAnimal(d)?'sighting':'mark',status:d.status,count:isAnimal(d)?d.count:undefined,note:'Marked'+(d.place?' at '+d.place:'')}];
+    d.created=Date.now(); delete d._loc; delete d._new; S.spots.push(d); toast(`Saved ${nameOf(d)}`);
+  } else {
+    const i=S.spots.findIndex(p=>p.id===d.id), old=S.spots[i];
+    if(old.status!==d.status){ const l=last(old); d.history.push({lat:l.lat,lng:l.lng,t:Date.now(),type:'status',status:d.status,note:'Status → '+STATUS[d.status].label}); }
+    delete d._new; S.spots[i]=d; toast('Saved');
+  }
+  save(); draft=null; closeModal(); selectedId=d.id; refresh();
+  const p=pos(d); if(p) map.setView([p.lat,p.lng],Math.max(map.getZoom(),16));
+}
+
+/* ---------- pick on map ---------- */
+let pickCb=null, pickCancel=null;
+function pickOnMap(text,cb,cancel){ pickCb=cb; pickCancel=cancel; $('#bannerText').textContent=text; $('#banner').classList.add('show'); $('#cross').classList.add('show'); setSheet('min'); }
+function endPick(){ $('#banner').classList.remove('show'); $('#cross').classList.remove('show'); pickCb=null; pickCancel=null; setSheet('mid'); }
+$('#bannerOk').onclick=()=>{ const c=map.getCenter(), cb=pickCb; endPick(); cb&&cb({lat:c.lat,lng:c.lng}); };
+$('#bannerCancel').onclick=()=>{ const cb=pickCancel; endPick(); cb&&cb(); };
+map.on('contextmenu',e=>{ if(pickCb) return; openEditor(null,{lat:e.latlng.lat,lng:e.latlng.lng}); });
+
+/* ---------- detail ---------- */
+function openDetail(id,fly){
+  const p=getS(id); if(!p) return; selectedId=id; renderMarkers(); renderList();
+  const ps=pos(p); if(fly&&ps) map.setView([ps.lat,ps.lng],Math.max(map.getZoom(),17));
+  const k=kindOf(p), g=groupOf(p), st=STATUS[p.status], d=me&&ps?haversine(me,ps):null, animal=isAnimal(p);
+  const sightings=p.history.filter(h=>h.type==='sighting'), harvests=p.history.filter(h=>h.type==='harvest');
+  let todHtml='';
+  if(animal && sightings.length){ const c=[0,0,0,0]; sightings.forEach(h=>c[todBucket(h.t)]++); const mx=Math.max(...c);
+    const counts=sightings.map(h=>h.count||0).filter(Boolean); const biggest=counts.length?Math.max(...counts):0;
+    todHtml=`<label class="f">When they show up (${sightings.length} sighting${sightings.length>1?'s':''}${biggest?`, most at once: ${biggest}`:''})</label>
+      <div class="tod">${c.map((n,i)=>`<div class="${n===mx&&n>0?'top':''}"><b>${n}</b>${TOD[i]}</div>`).join('')}</div>`; }
+  let spread='';
+  if(animal && sightings.length>1){ let far=0; for(let i=0;i<sightings.length;i++) for(let j=i+1;j<sightings.length;j++) far=Math.max(far,haversine(sightings[i],sightings[j])); spread=` · range ${fmtDist(far)}`; }
+  const hist=[...p.history].reverse();
+  openModal(`
+    ${p.photos?.[0]?`<img class="bigphoto" src="${p.photos[0]}">`:''}
+    <h2><span style="font-size:28px">${k.emoji}</span> ${esc(nameOf(p))} ${p.count>1?`<span style="color:var(--dim);font-size:16px">×${p.count}</span>`:''} <span class="badge" style="background:${st.color}">${st.emoji} ${st.label}</span></h2>
+    <div class="sub">${p.name?esc(k.name)+' · ':''}${esc(g.label)}${p.place?' · '+esc(p.place):''} · updated ${ago(last(p).t)}${d!=null?` · <b style="color:var(--text)">${fmtDist(d)} ${compass(bearing(me,ps))}</b> from you`:''}</div>
+    <div class="btns" style="margin-top:4px">
+      <button class="btn pri" id="dFind">🧭 Find it</button>
+      <button class="btn" id="dLog">${animal?'👀 Log sighting':'🧺 Log visit / harvest'}</button>
+    </div>
+    ${k.warn?`<div class="warn">⚠️ ${esc(k.tip)}</div>`:k.tip?`<div class="tip">💡 ${esc(k.tip)}</div>`:''}
+    <label class="f">Season: ${seasonText(k)} ${inSeason(p)?'· <span style="color:#c7e59f">in season now</span>':'· out of season'}</label>
+    ${monthsBar(monthsFor(k))}
+    ${todHtml}
+    <div class="kv">
+      <span>Location</span><span>${ps.lat.toFixed(6)}, ${ps.lng.toFixed(6)}</span>
+      <span>History</span><span>${p.history.length} entr${p.history.length>1?'ies':'y'}${animal?` · ${sightings.length} sighting${sightings.length!==1?'s':''}${spread}`:` · ${harvests.length} harvest${harvests.length!==1?'s':''}`}</span>
+      <span>First marked</span><span>${fmtTime(p.created||p.history[0].t)}</span>
+      ${p.notes?`<span>Notes</span><span>${esc(p.notes)}</span>`:''}
+    </div>
+    ${p.photos?.length>1?`<div class="photos">${p.photos.slice(1).map(ph=>`<div class="ph"><img src="${ph}"></div>`).join('')}</div>`:''}
+    <label class="f">Log</label>
+    <ul class="timeline">${hist.map((h,i)=>`<li style="--c:${STATUS[h.status]?.color||'#888'}"><b>${h.type==='sighting'?'👀 Sighting':h.type==='harvest'?'🧺 Harvest':h.type==='status'?'Status':h.type==='moved'?'📍 Moved':'📌 Marked'}</b>${h.count?` · ${h.count} seen`:''}${h.amount?` · ${esc(h.amount)}`:''}${h.note?' — '+esc(h.note):''}
+      <div class="when">${fmtTime(h.t)} · ${STATUS[h.status]?.label||''} · <a href="#" data-goto="${p.history.length-1-i}" style="color:var(--brass)">show on map</a></div></li>`).join('')}</ul>
+    <div class="btns">
+      <button class="btn sm" id="dEdit">✏️ Edit</button>
+      <button class="btn sm" id="dShare">🔗 Copy location</button>
+      <a class="btn sm" target="_blank" rel="noopener" href="https://maps.apple.com/?daddr=${ps.lat},${ps.lng}">Apple Maps</a>
+      <a class="btn sm" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${ps.lat},${ps.lng}">Google Maps</a>
+      <button class="btn sm dan" id="dDel">🗑️ Delete</button>
+      <button class="btn sm" id="dClose" style="margin-left:auto">Close</button>
+    </div>`);
+  $('#dFind').onclick=()=>{ closeModal(); openFinder(p.id); };
+  $('#dLog').onclick=()=>logDialog(p.id);
+  $('#dEdit').onclick=()=>openEditor(p);
+  $('#dClose').onclick=closeModal;
+  $('#dShare').onclick=async()=>{ const t=`${k.emoji} ${nameOf(p)} (${st.label}) — https://maps.google.com/?q=${ps.lat},${ps.lng}`; try{ await navigator.clipboard.writeText(t); toast('Copied location'); }catch(e){ toast(t); } };
+  $('#dDel').onclick=()=>confirmBox(`Delete ${esc(nameOf(p))} and its whole history?`,()=>{ S.spots=S.spots.filter(x=>x.id!==p.id); selectedId=null; save(); closeModal(); refresh(); toast('Deleted'); },()=>openDetail(p.id));
+  $('#card').querySelectorAll('[data-goto]').forEach(a=>a.onclick=e=>{ e.preventDefault(); const h=p.history[+a.dataset.goto]; closeModal(); map.setView([h.lat,h.lng],18); });
+}
+function confirmBox(msg,yes,no){
+  openModal(`<h2>Are you sure?</h2><div class="sub" style="font-size:15px">${msg}</div><div class="btns"><button class="btn" id="cNo">Cancel</button><button class="btn" id="cYes" style="background:var(--danger);color:#fff;border-color:#991b1b">Yes, delete</button></div>`);
+  $('#cNo').onclick=()=>{ no?no():closeModal(); }; $('#cYes').onclick=yes;
+}
+
+/* ---------- log visit / sighting / harvest ---------- */
+function logDialog(id){
+  const p=getS(id), animal=isAnimal(p);
+  let type=animal?'sighting':'harvest', status=animal?'seen':(p.status==='growing'?'ready':'harvested');
+  const draw=()=>{
+    openModal(`<h2 class="st">${kindOf(p).emoji} LOG ${esc(nameOf(p)).toUpperCase()}</h2>
+      <div class="sub">${animal?'Each sighting adds a point, so you can see where the herd moves and what time of day they show up.':'Record what you found or took. The log builds up a yearly picture of this spot.'}</div>
+      <label class="f">What happened</label>
+      <div class="seg" id="lType">
+        ${animal?`<button data-v="sighting" class="${type==='sighting'?'on':''}">👀 Saw them</button>`:''}
+        <button data-v="harvest" class="${type==='harvest'?'on':''}">🧺 Harvested / took</button>
+        <button data-v="check" class="${type==='check'?'on':''}">🔎 Checked on it</button>
+        <button data-v="moved" class="${type==='moved'?'on':''}">📍 Fix the location</button>
+      </div>
+      ${type==='sighting'?`<label class="f">How many?</label><input class="in" id="lCount" type="number" min="1" inputmode="numeric" value="${p.count||1}">`:''}
+      ${type==='harvest'?`<label class="f">How much?</label><input class="in" id="lAmount" placeholder="e.g. 1 deer, 5 lb, 2 buckets, 30 ears">`:''}
+      <label class="f">Status now</label>
+      <div class="seg" id="lStatus">${Object.entries(STATUS).map(([s,o])=>`<button data-v="${s}" class="${status===s?'on':''}">${o.emoji} ${o.label}</button>`).join('')}</div>
+      <label class="f">Note (optional)</label><input class="in" id="lNote" placeholder="${animal?'e.g. heading north into the cedar swamp':'e.g. about half left, come back next week'}">
+      <label class="f">Where</label>
+      <div class="btns" style="margin-top:0">
+        ${type==='sighting'||type==='moved'?`<button class="btn pri" id="lHere">📍 Where I am now</button><button class="btn" id="lPick">🗺️ Pick on map</button>`:''}
+        ${type==='harvest'||type==='check'?`<button class="btn pri" id="lSame">✅ Save (same spot)</button>`:''}
+        ${type==='sighting'?`<button class="btn" id="lSame">Same spot as last time</button>`:''}
+      </div>
+      <div class="btns"><button class="btn" id="lCancel">Cancel</button></div>`);
+    $('#lType').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; type=b.dataset.v;
+      if(type==='harvest'&&animal) status='seen'; if(type==='harvest'&&!animal) status='harvested'; if(type==='check'&&!animal&&p.status==='harvested') status='ready'; draw(); });
+    $('#lStatus').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; status=b.dataset.v; [...$('#lStatus').children].forEach(x=>x.classList.toggle('on',x===b)); });
+    const vals=()=>({note:$('#lNote').value.trim(), count:$('#lCount')?Math.max(1,parseInt($('#lCount').value)||1):undefined, amount:$('#lAmount')?$('#lAmount').value.trim():undefined});
+    const commit=(ll,v)=>{
+      p.status=status; if(v.count) p.count=v.count;
+      p.history.push({lat:ll.lat,lng:ll.lng,t:Date.now(),type,status,count:v.count,amount:v.amount||undefined,note:v.note||undefined});
+      save(); selectedId=p.id; refresh(); map.setView([ll.lat,ll.lng],Math.max(map.getZoom(),16));
+      toast(type==='sighting'?'Sighting logged':type==='harvest'?'Harvest logged':'Saved'); openDetail(p.id); };
+    const same=$('#lSame'); if(same) same.onclick=()=>commit(pos(p),vals());
+    const here=$('#lHere'); if(here) here.onclick=async()=>{ const v=vals(); here.textContent='Getting GPS…'; const f=await getFix(); if(!f){ toast('No GPS fix. Pick on the map.'); here.textContent='📍 Where I am now'; return; } commit({lat:f.lat,lng:f.lng},v); };
+    const pick=$('#lPick'); if(pick) pick.onclick=()=>{ const v=vals(); closeModal(); const ps=pos(p); map.setView([ps.lat,ps.lng]);
+      pickOnMap(animal&&type==='sighting'?'Put the crosshair where you saw them':'Put the crosshair on the right spot',ll=>commit(ll,v),()=>openDetail(p.id)); };
+    $('#lCancel').onclick=()=>openDetail(p.id);
+  };
+  draw();
+}
+
+/* ---------- finder ---------- */
+let findId=null, heading=null, compassOn=false;
+function openFinder(id){ findId=id; const p=getS(id), ps=pos(p);
+  $('#ftitle').textContent=`${kindOf(p).emoji} ${nameOf(p)}`; $('#fsub').textContent=[STATUS[p.status].label,p.place].filter(Boolean).join(' · ');
+  $('#fApple').href=`https://maps.apple.com/?daddr=${ps.lat},${ps.lng}`; $('#fGoogle').href=`https://www.google.com/maps/dir/?api=1&destination=${ps.lat},${ps.lng}&travelmode=walking`;
+  $('#finder').classList.add('open'); startGPS(false); updateFinder(); }
+function updateFinder(){ if(!findId||!$('#finder').classList.contains('open')) return; const p=getS(findId); if(!p) return; const ps=pos(p);
+  if(!me){ $('#fdist').textContent='—'; $('#fdir').textContent='Waiting for GPS…'; return; }
+  const d=haversine(me,ps), b=bearing(me,ps), close=d<Math.max(10,me.acc);
+  $('#fdist').textContent=fmtDist(d); $('#fdir').textContent=`${compass(b)} (${Math.round(b)}°) · GPS ±${fmtDist(me.acc)}`;
+  $('#arrow').style.transform=`rotate(${heading!=null?b-heading:b}deg)`; $('#finder').classList.toggle('close',close);
+  $('#fhint').textContent=close?"You're there. Look around."+(isAnimal(p)?' Move slow and quiet, and stay downwind.':''):heading!=null?'The arrow points to the spot. Hold your phone flat.':'The arrow points relative to north. Tap “Use compass” so it turns with your phone.'; }
+function onOrient(e){ const h=e.webkitCompassHeading!=null?e.webkitCompassHeading:(e.absolute&&e.alpha!=null?360-e.alpha:null); if(h!=null){ heading=h; updateFinder(); } }
+$('#compassBtn').onclick=async()=>{ try{ if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){ const r=await DeviceOrientationEvent.requestPermission(); if(r!=='granted'){ toast('Compass permission denied'); return; } }
+  if(!compassOn){ window.addEventListener('deviceorientationabsolute',onOrient,true); window.addEventListener('deviceorientation',onOrient,true); compassOn=true; }
+  $('#compassBtn').textContent='🧭 Compass on'; setTimeout(()=>{ if(heading==null) toast('No compass on this device'); },2500); }catch(e){ toast('Compass not available'); } };
+$('#fClose').onclick=()=>{ $('#finder').classList.remove('open'); findId=null; };
+$('#fFound').onclick=()=>{ const id=findId; $('#finder').classList.remove('open'); findId=null; logDialog(id); };
+
+/* ---------- menu ---------- */
+function download(name,text,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500); }
+function csv(){
+  const rows=[['name','kind','category','status','count','place','lat','lng','in_season','last_update','entries','notes']];
+  S.spots.forEach(p=>{ const l=last(p); rows.push([nameOf(p),kindOf(p).name,groupOf(p).label,STATUS[p.status].label,p.count,p.place||'',l.lat,l.lng,inSeason(p)?'yes':'no',new Date(l.t).toISOString(),p.history.length,p.notes||'']); });
+  rows.push([]); rows.push(['--- full log ---']); rows.push(['name','time','entry','status','count','amount','lat','lng','note']);
+  S.spots.forEach(p=>p.history.forEach(h=>rows.push([nameOf(p),new Date(h.t).toISOString(),h.type,STATUS[h.status]?.label||'',h.count||'',h.amount||'',h.lat,h.lng,h.note||''])));
+  return rows.map(r=>r.map(v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(',')).join('\n'); }
+$('#menuBtn').onclick=()=>{
+  const photos=S.spots.reduce((a,p)=>a+(p.photos?.length||0),0), harvests=S.spots.reduce((a,p)=>a+p.history.filter(h=>h.type==='harvest').length,0);
+  openModal(`<h2 class="st">☢ LAST PANTRY</h2><div class="sub">${S.spots.length} spot${S.spots.length!==1?'s':''} · ${harvests} harvest${harvests!==1?'s':''} logged · ${photos} photo${photos!==1?'s':''} · saved on this device</div>
+  <div class="menu-list">
+    <button id="mnRegion">🌍 Region: ${esc(R().name)}<small>Sets which foods are listed and when they're in season${S.regionAuto?' (auto-detected from GPS)':''}</small></button>
+    <button id="mnCal">🗓️ Season calendar<small>What's ready each month in your region</small></button>
+    <button id="mnDep">${hideDepleted?'👁️ Show':'🙈 Hide'} picked-clean spots<small>Spots marked gone are ${hideDepleted?'hidden':'shown'}</small></button>
+    <button id="mnGrim">${S.grim?'🎨 Normal map colors':'☢ Wasteland map tint'}<small>Change the map's color style</small></button>
+    <button id="mnJson">💾 Back up everything (.json)<small>Includes photos and full logs. Use it to move to another phone or PC.</small></button>
+    <button id="mnCsv">📊 Export spreadsheet (.csv)<small>Opens in Excel: spots plus every sighting and harvest</small></button>
+    <button id="mnImp">📥 Restore / merge a backup<small>Adds spots from a .json backup (keeps what you have)</small></button>
+    <button id="mnHelp">❓ How to use</button>
+    <button id="mnWipe" style="color:#fca5a5">🧨 Erase all data</button>
+  </div><div class="btns"><button class="btn" id="mnClose">Close</button></div>`);
+  $('#mnClose').onclick=closeModal;
+  $('#mnCal').onclick=calendar;
+  $('#mnRegion').onclick=regionPicker;
+  $('#mnDep').onclick=()=>{ hideDepleted=!hideDepleted; closeModal(); refresh(); };
+  $('#mnGrim').onclick=()=>{ S.grim=!S.grim; document.body.classList.toggle('grim',S.grim); save(); closeModal(); };
+  $('#mnJson').onclick=()=>{ download(`last-pantry-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify({app:'last-pantry',v:1,...S}),'application/json'); toast('Backup downloaded'); };
+  $('#mnCsv').onclick=()=>{ download(`last-pantry-${new Date().toISOString().slice(0,10)}.csv`,csv(),'text/csv'); toast('CSV downloaded'); };
+  $('#mnImp').onclick=()=>{ $('#importIn').value=''; $('#importIn').click(); };
+  $('#mnHelp').onclick=help;
+  $('#mnWipe').onclick=()=>confirmBox('Erase ALL spots, logs and photos on this device? Back up first if you are not sure.',()=>{ S.spots=[]; selectedId=null; save(); closeModal(); refresh(); toast('All data erased'); });
+};
+function regionPicker(){
+  const sug = me ? guessRegion(me.lat,me.lng) : null;
+  openModal(`<h2 class="st">🌍 PICK YOUR REGION</h2><div class="sub">Changes which foods are listed and shifts season timing (for example, the Southern Hemisphere is 6 months off).${sug?` From your GPS it looks like <b>${esc(REGIONS[sug].name)}</b>.`:''}</div>
+    <div class="menu-list">${Object.entries(REGIONS).map(([id,r])=>`<button data-r="${id}" style="${S.region===id?'border-color:var(--brass);background:#3a3218':''}">${S.region===id?'✓ ':''}${esc(r.name)}${id===sug?'<small>📍 suggested from your location</small>':''}</button>`).join('')}</div>
+    <div class="btns"><button class="btn" id="rgX">Close</button></div>`);
+  $('#card').querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{ setRegion(b.dataset.r,false,true); closeModal(); });
+  $('#rgX').onclick=closeModal;
+}
+function setRegion(id,auto,fly){ S.region=id; S.regionAuto=!!auto; save(); $('#regionLbl').textContent=REGIONS[id].name; refresh();
+  if(fly && !S.spots.length && !me){ const r=REGIONS[id]; map.setView(r.c,r.z); }
+  toast('Region: '+REGIONS[id].name); }
+function calendar(){
+  const n=curMonth();
+  let h=`<h2 class="st">🗓️ SEASON CALENDAR</h2><div class="sub">Rough timing for <b>${esc(R().name)}</b>. Change your region in the menu. The outlined column is ${MONTH_NAMES[n-1]}, and green means in season. Local weather can shift things by a few weeks.</div>`;
+  for(const g in GROUPS){ const ks=availK().filter(k=>k.group===g); if(!ks.length) continue; h+=`<div class="cal-g">${GROUPS[g].emoji} ${GROUPS[g].label}</div>`;
+    ks.forEach(k=>{ h+=`<div class="cal-row"><span>${k.emoji} ${esc(k.name)}</span>${monthsBar(monthsFor(k))}</div>`; }); }
+  h+=`<div class="btns"><button class="btn pri" id="calX">Close</button></div>`;
+  openModal(h); $('#calX').onclick=closeModal;
+}
+$('#importIn').addEventListener('change',async e=>{ const f=e.target.files[0]; if(!f) return;
+  try{ const data=JSON.parse(await f.text()); if(!Array.isArray(data.spots)) throw 0; let added=0,updated=0;
+    data.spots.forEach(p=>{ const i=S.spots.findIndex(x=>x.id===p.id); if(i<0){ S.spots.push(p); added++; } else if(last(p).t>last(S.spots[i]).t){ S.spots[i]=p; updated++; } });
+    save(); closeModal(); refresh(); fitAll(); toast(`Imported: ${added} new, ${updated} updated`); }catch(err){ toast("That file isn't a Last Pantry backup"); } });
+function help(){
+  openModal(`<h2 class="st">❓ HOW TO USE</h2>
+  <div class="kv" style="gap:10px 12px">
+    <span>＋</span><span>Mark food where you're standing: deer, turkeys, a corn field, walnut trees, a ditch of asparagus, a spring…</span>
+    <span>Long-press</span><span>Hold anywhere on the map (right-click on PC) to mark a spot there.</span>
+    <span>👀 Sightings</span><span>For animals, log each sighting. The map draws their trail, and the app shows whether they come at dawn, day, dusk or night.</span>
+    <span>🧺 Harvests</span><span>Log what you took and how much, and mark spots “Ready”, “Not ripe yet” or “Picked clean”.</span>
+    <span>🗓️ In season</span><span>The green chip filters to what's in season this month. The menu has a full calendar.</span>
+    <span>🧭 Find it</span><span>Shows an arrow and the distance to walk to any spot.</span>
+    <span>🛰️</span><span>Satellite view, for finding field edges, orchards, creeks and old farmsteads.</span>
+    <span>🌍 Region</span><span>Works worldwide. It picks your region from GPS, and you can change it in the menu. The food list and seasons adjust to match.</span>
+  </div>
+  <div class="tip"><b>iPhone:</b> in Safari tap Share → <b>Add to Home Screen</b>. It then works offline, and map areas you've already looked at stay saved.</div>
+  <div class="warn">⚠️ Survival tips aside, follow today's rules: hunting and fishing need a license and must be in season, and you need permission to forage on private land and farm fields. Only eat wild plants and mushrooms you can identify with certainty. Boil or filter all wild water.</div>
+  <div class="btns"><button class="btn pri" id="hOk">Got it</button></div>`);
+  $('#hOk').onclick=closeModal;
+}
+
+/* ---------- buttons ---------- */
+$('#addBtn').onclick=()=>openEditor(null,me?{lat:me.lat,lng:me.lng}:null);
+$('#meBtn').onclick=()=>{ followMe=true; if(me) map.setView([me.lat,me.lng],Math.max(map.getZoom(),17)); startGPS(true); };
+$('#regionLbl').onclick=regionPicker; $('#regionLbl').style.cursor='pointer';
+$('#layerBtn').onclick=()=>setLayer(S.layer==='sat'?'street':'sat');
+$('#trailBtn').onclick=()=>{ showAllTrails=!showAllTrails; $('#trailBtn').classList.toggle('live',showAllTrails); renderTrails(); toast(showAllTrails?'Showing all movement trails':'Trails: selected spot only'); };
+function fitAll(){ const pts=S.spots.filter(visible).map(pos).filter(Boolean).map(p=>[p.lat,p.lng]); if(me) pts.push([me.lat,me.lng]);
+  if(pts.length===1) map.setView(pts[0],17); else if(pts.length) map.fitBounds(pts,{padding:[50,50],maxZoom:18}); }
+$('#fitBtn').onclick=fitAll;
+map.on('click',()=>{ if(selectedId&&!pickCb){ selectedId=null; renderMarkers(); renderList(); } });
+
+/* ---------- offline ---------- */
+if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+
+/* ---------- boot ---------- */
+(async()=>{
+  await load(); document.body.classList.toggle('grim',S.grim!==false);
+  setLayer(S.layer||'street'); $('#regionLbl').textContent=S.region?REGIONS[S.region].name:'food finder'; refresh(); positionFabs();
+  if(S.spots.length) fitAll();
+  startGPS(!S.spots.length);
+  if(!S.spots.length) setTimeout(help,400);
+})();
+})();
+</script>
+</body>
+</html>
